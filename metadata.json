@@ -1,0 +1,8 @@
+{
+  "name": "QR Botanical Morph",
+  "description": "Interactive 3D experience transforming a QR code into a living 3D pixel-leaf tree with natural falling leaves and smooth 2D image morphing.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
