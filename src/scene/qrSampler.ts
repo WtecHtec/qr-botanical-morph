@@ -1,3 +1,6 @@
+import defaultQrAsset from '../assets/default-qr.png';
+import { DEFAULT_QR_DATA_URI } from './defaultQrData';
+
 export type QrModuleRole = 'finder' | 'data';
 
 export interface QrPixelModule {
@@ -16,15 +19,35 @@ export interface QrSampleResult {
   sourceUrl: string;
 }
 
-export const DEFAULT_QR_IMAGE_URL =
-  '/assets/aistudio/https___github.com_WtecHtec_qr-botanical-morph_a81970a2.png';
+/**
+ * Default QR Image URL.
+ * Uses Vite-managed bundled asset URL with an immediate embedded Base64 fallback
+ * to guarantee image accessibility in all production builds, subpaths, and offline environments.
+ */
+export const DEFAULT_QR_IMAGE_URL: string = defaultQrAsset || DEFAULT_QR_DATA_URI;
 
 function loadImage(url: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
     const img = new Image();
-    img.crossOrigin = 'anonymous';
+    const isLocalOrData = url.startsWith('data:') || url.startsWith('blob:');
+
+    // Only set crossOrigin for external remote URLs to prevent unnecessary CORS/taint failures on local assets
+    if (!isLocalOrData) {
+      img.crossOrigin = 'anonymous';
+    }
+
     img.onload = () => resolve(img);
-    img.onerror = (err) => reject(err);
+    img.onerror = () => {
+      // If it failed with anonymous crossOrigin, retry once without crossOrigin
+      if (img.crossOrigin) {
+        const retryImg = new Image();
+        retryImg.onload = () => resolve(retryImg);
+        retryImg.onerror = (err) => reject(err);
+        retryImg.src = url;
+      } else {
+        reject(new Error(`Failed to load image at: ${url}`));
+      }
+    };
     img.src = url;
   });
 }
@@ -45,7 +68,19 @@ function snapToQrVersionSize(raw: number): number {
 }
 
 export async function sampleQrFromImage(url: string = DEFAULT_QR_IMAGE_URL): Promise<QrSampleResult> {
-  const img = await loadImage(url);
+  let img: HTMLImageElement;
+
+  try {
+    img = await loadImage(url);
+  } catch (err) {
+    console.warn(`[qrSampler] Failed to load image from "${url.slice(0, 80)}", falling back to embedded Data URI...`, err);
+    try {
+      img = await loadImage(DEFAULT_QR_DATA_URI);
+    } catch (fallbackErr) {
+      console.warn('[qrSampler] Even fallback Data URI failed, generating algorithmic QR fallback...', fallbackErr);
+      return buildFallbackQr(url);
+    }
+  }
 
   const sampleWidth = Math.max(256, Math.min(768, img.naturalWidth || 512));
   const sampleHeight = Math.max(256, Math.min(768, img.naturalHeight || 512));
